@@ -1,0 +1,482 @@
+{
+  "name": "Youtube Scirpt Konten",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "74566c14-a75a-4880-b22d-dfdd353fabed",
+      "name": "Telegram Trigger",
+      "webhookId": "dd4dde80-d6bc-4241-9e71-984ac54c488a",
+      "credentials": {
+        "telegramApi": {
+          "id": "hDhp41tKeI6o5Uc1",
+          "name": "Extract Prompt"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ambil input dari AI Agent (format apapun)\nconst rawInput = $input.all()[0].json.rawText || $input.all()[0].json.output || $input.all()[0].json || '';\n\nfunction processUniversalContent(text) {\n  if (!text) return [{ error: \"No input provided\" }];\n  \n  // Convert ke string kalau object\n  const content = typeof text === 'string' ? text : JSON.stringify(text);\n  const output = [];\n  \n  // UNIVERSAL PARAGRAPH DETECTION\n  let sections = [];\n  \n  // Try berbagai pattern paragraf\n  const patterns = [\n    /\\*\\*Paragraf \\d+[^*]*\\*\\*/g,           // **Paragraf 1: Title**\n    /\\*\\*Paragraf \\d+\\*\\*/g,                // **Paragraf 1**\n    /Paragraf \\d+[^:\\n]*/g,                 // Paragraf 1 (plain)\n    /\\d+\\.\\s*\\*\\*[^*]+\\*\\*/g,              // 1. **Title**\n    /\\*\\*\\d+\\.[^*]+\\*\\*/g,                 // **1. Title**\n    /---\\s*\\n\\n/g                          // Section dengan ---\n  ];\n  \n  // Coba semua pattern sampai ada yang match\n  for (let pattern of patterns) {\n    const matches = content.split(pattern);\n    if (matches.length > 2) {\n      sections = matches;\n      break;\n    }\n  }\n  \n  // Kalau ga ada pattern yang match, split by double newline\n  if (sections.length <= 1) {\n    sections = content.split(/\\n\\n+/);\n  }\n  \n  // Process setiap section\n  sections.forEach((section, index) => {\n    if (!section.trim() || index === 0) return;\n    \n    const paragrafNum = index;\n    let scriptContent = '';\n    let promptContent = '';\n    \n    // FLEXIBLE SCRIPT EXTRACTION\n    const scriptPatterns = [\n      /\\*\\*Script[^:]*:\\*\\*\\s*(.*?)(?=\\*\\*Prompt|$)/s,\n      /Script[^:]*:\\s*(.*?)(?=Prompt|$)/s,\n      /Konten[^:]*:\\s*(.*?)(?=Prompt|$)/s,\n      /^(.*?)(?=\\*\\*Prompt|Prompt|`)/s,\n      /^(.{50,}?)(?=\\n\\n|\\*\\*|$)/s\n    ];\n    \n    for (let pattern of scriptPatterns) {\n      const match = section.match(pattern);\n      if (match && match[1] && match[1].trim().length > 20) {\n        scriptContent = match[1].trim()\n          .replace(/\\*+/g, '')\n          .replace(/\\n+/g, ' ')\n          .replace(/\\s+/g, ' ');\n        break;\n      }\n    }\n    \n    // FLEXIBLE PROMPT EXTRACTION\n    const promptPatterns = [\n      /\\*\\*Prompt[^:]*:\\*\\*\\s*`([^`]+)`/s,\n      /Prompt[^:]*:\\s*`([^`]+)`/s,\n      /`([^`]{50,})`/s,\n      /--ar\\s+\\d+:\\d+[^.]*$/m,\n      /\\*\\*Prompt[^:]*:\\*\\*\\s*([^*\\n]{30,})/s\n    ];\n    \n    for (let pattern of promptPatterns) {\n      const match = section.match(pattern);\n      if (match && match[1] && match[1].trim().length > 10) {\n        promptContent = match[1].trim();\n        break;\n      }\n    }\n    \n    // Kalau ga ada script tapi ada text panjang, ambil aja\n    if (!scriptContent && section.trim().length > 50) {\n      scriptContent = section.trim()\n        .replace(/\\*+/g, '')\n        .replace(/\\n+/g, ' ')\n        .substring(0, 500);\n    }\n    \n    // Output kalau ada content\n    if (scriptContent && scriptContent.length > 20) {\n      output.push({\n        paragraf: paragrafNum,\n        script_konten: scriptContent.substring(0, 500),\n        prompt_midjourney: promptContent || \"Auto-generated prompt needed\",\n        kategori: \"Universal Format\",\n        detected_format: promptContent ? \"Script + Prompt\" : \"Script Only\"\n      });\n    }\n  });\n  \n  return output.length > 0 ? output : [{ \n    error: \"Format tidak dikenali\", \n    debug_info: `Input length: ${content.length}, Sections found: ${sections.length}`,\n    sample_content: content.substring(0, 200) + \"...\"\n  }];\n}\n\nreturn processUniversalContent(rawInput);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        0
+      ],
+      "id": "54c12d10-6bdd-479d-9c77-2d3f477fd3d0",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=tugas penting yang harus kamu lakukan disini adalah :\n\n1. optimasi script konten :\n- tolong buat ulang script konten yang berasal dari {{ $json.transcription }} yang harus kamu perhatikan buat script konten ini lebih maksimal memberikan nilai plus dan melengkapi kekurangan dari {{ $json.transcription }} usahakan gunakan bahasa sentuhan manusia \n- gunakan bahasa yang santai sesuai dengan target audience yang suka dengan tema video tersebut. \n- Buatkan Prompt gambarnya secara lengkap detail dengan struktur rumus agar hasilnya maksimal, usahakan prompt gambar ini itu mengambil dari hasil script yang sudah di optimasi fokus ke isi scriptnya.\n\n2. yang harus kamu hindari :\npembawaan bahasa yang kaku, bahasa seperti robot, aneh, tidak ada sentuhan manusia, dan monoton.\n\n3. output format :\n- langsung kasih output script konten per paragraf plus ada prompt gambar yang punya struktur lengkap untuk dibuat di midjourney. hanya itu saja\n- output script konten bahasa indonesia dan prompt bahasa inggris jangan input karakter -- raw, style v untuk midjourney",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        420,
+        0
+      ],
+      "id": "4ee2aa95-e8a0-4ed9-9fa9-138c9751aa46",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        420,
+        220
+      ],
+      "id": "01d55e47-afc3-402b-94d8-69a3855f4df4",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Nh5dco36q1jCFArn",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Function untuk gabung semua script\nfunction combineAllScripts(inputData) {\n  if (!inputData || !Array.isArray(inputData)) {\n    return [{ combined_script: \"No input data\", word_count: 0 }];\n  }\n  \n  // Gabung semua script_konten jadi satu\n  const allScripts = inputData\n    .filter(item => item.script_konten) // Filter yang ada script\n    .sort((a, b) => a.paragraf - b.paragraf) // Urutkan berdasarkan paragraf\n    .map(item => item.script_konten) // Ambil cuma script-nya\n    .join(' '); // Gabung dengan spasi\n  \n  // Hitung statistik\n  const wordCount = allScripts.split(' ').length;\n  const estimatedDuration = Math.ceil(wordCount / 3); // 3 kata per detik\n  \n  return [{\n    combined_script: allScripts,\n    total_paragraphs: inputData.length,\n    word_count: wordCount,\n    estimated_duration_seconds: estimatedDuration,\n    ready_for_tts: true,\n    audio_title: \"Eropa - Script Lengkap\"\n  }];\n}\n\n// Execute dengan input dari node sebelumnya\nconst inputData = $input.all().map(item => item.json);\nreturn combineAllScripts(inputData);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        140
+      ],
+      "id": "7e7a3c74-4cd1-43d0-9397-caf4bae9e42b",
+      "name": "Final Script"
+    },
+    {
+      "parameters": {
+        "operation": "sendAudio",
+        "chatId": "1797816281",
+        "binaryData": true,
+        "binaryPropertyName": "=data",
+        "additionalFields": {
+          "fileName": "={{ $json.audio_title }}.mp3"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1440,
+        140
+      ],
+      "id": "1b3a9aa1-a849-4d2a-a0e3-f562d260b308",
+      "name": "Telegram",
+      "webhookId": "1b4ba48b-a0b7-4dd6-aedf-7281ed9732c4",
+      "credentials": {
+        "telegramApi": {
+          "id": "hDhp41tKeI6o5Uc1",
+          "name": "Extract Prompt"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1N03iwJwgm29GUSmeutKkdPJy5ER2r_bZY6ofv6Ah3-Y",
+          "mode": "list",
+          "cachedResultName": "Youtube Content",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1N03iwJwgm29GUSmeutKkdPJy5ER2r_bZY6ofv6Ah3-Y/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1N03iwJwgm29GUSmeutKkdPJy5ER2r_bZY6ofv6Ah3-Y/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Prompt Paragraf 1": "={{ $json['Paragraf 1'] }}",
+            "Prompt Paragraf 2": "={{ $json['Paragraf 2'] }}",
+            "Prompt Pargaraf 3": "={{ $json['Paragraf 3'] }}",
+            "Prompt Pargraf 4": "={{ $json['Paragraf 4'] }}",
+            "Prompt Paragraf 5": "={{ $json['Paragraf 5'] }}",
+            "Prompt Paragraf 6": "={{ $json['Paragraf 6'] }}",
+            "Prompt Paragarf 7": "={{ $json['Paragraf 7'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Link Youtube",
+              "displayName": "Link Youtube",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prompt Paragraf 1",
+              "displayName": "Prompt Paragraf 1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prompt Paragraf 2",
+              "displayName": "Prompt Paragraf 2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prompt Pargaraf 3",
+              "displayName": "Prompt Pargaraf 3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prompt Pargraf 4",
+              "displayName": "Prompt Pargraf 4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prompt Paragraf 5",
+              "displayName": "Prompt Paragraf 5",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prompt Paragraf 5",
+              "displayName": "Prompt Paragraf 5",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prompt Paragraf 6",
+              "displayName": "Prompt Paragraf 6",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prompt Paragarf 7",
+              "displayName": "Prompt Paragarf 7",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prompt Pargarf 8 ",
+              "displayName": "Prompt Pargarf 8 ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prompt Paragaft 9",
+              "displayName": "Prompt Paragaft 9",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prompt Pargarf 10",
+              "displayName": "Prompt Pargarf 10",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1220,
+        -80
+      ],
+      "id": "b742d7d8-1fb7-42c6-9783-ee58bb680c38",
+      "name": "Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "qA0qo6zBGD4xtKoY",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ambil semua input\nconst allInputs = $input.all().map(item => item.json);\n\n// Bikin object dengan paragraf sebagai key, prompt sebagai value\nconst result = {};\n\nallInputs.forEach(item => {\n  const key = `Paragraf ${item.paragraf}`;\n  result[key] = item.prompt_midjourney;\n});\n\n// Return 1 row\nreturn [result];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        -80
+      ],
+      "id": "55d93e5f-1aae-44aa-9e8e-34c22a30fd47",
+      "name": "Extract Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/gmnazjXOFoOcWA59sd5m",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "output_format",
+              "value": "mp3_44100_128"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xi-api-key",
+              "value": "sk_6bcda172789ed2c34bfd4fdc089bf55546a3389afc25fe90"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ $json.combined_script }}"
+            },
+            {
+              "name": "model_id",
+              "value": "eleven_multilingual_v2"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        140
+      ],
+      "id": "7ed5d74d-cc02-4598-ae30-0f712a7556a6",
+      "name": "Text To Speach"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://youtube-transcripts-transcribe-youtube-video-to-text.p.rapidapi.com/transcribe",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-rapidapi-host",
+              "value": "youtube-transcripts-transcribe-youtube-video-to-text.p.rapidapi.com"
+            },
+            {
+              "name": "x-rapidapi-key",
+              "value": "ec0f9198b0msh88253411305a82cp1d3ee7jsn8369a033b7e7"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $json.message.text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "6efbe33f-7c02-412b-809d-1b9c3a96e7db",
+      "name": "Transcibe Youtube"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Transcibe Youtube",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Final Script",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Script": {
+      "main": [
+        [
+          {
+            "node": "Text To Speach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Prompt": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text To Speach": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcibe Youtube": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c5cf47ff-c739-4595-b4b6-ff75edf64898",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2f0441657a391bdda58a451cedcccf02e0157f101c89f542b5f883a6721ff2c1"
+  },
+  "id": "GjOhz1iHnd26g31z",
+  "tags": []
+}
